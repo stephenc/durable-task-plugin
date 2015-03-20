@@ -32,6 +32,8 @@ import hudson.model.TaskListener;
 import hudson.remoting.RemoteOutputStream;
 import hudson.remoting.VirtualChannel;
 import hudson.util.LogTaskListener;
+import jenkins.MasterToSlaveFileCallable;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -95,7 +97,7 @@ public abstract class FileMonitoringTask extends DurableTask {
                 return false;
             }
         }
-        private static class WriteLog implements FilePath.FileCallable<Long> {
+        private static class WriteLog extends MasterToSlaveFileCallable<Long> {
             private final long lastLocation;
             private final OutputStream sink;
             WriteLog(long lastLocation, OutputStream sink) {

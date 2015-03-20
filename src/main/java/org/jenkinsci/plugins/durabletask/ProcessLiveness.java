@@ -26,6 +26,8 @@ package org.jenkinsci.plugins.durabletask;
 
 import hudson.remoting.Callable;
 import hudson.remoting.VirtualChannel;
+import jenkins.security.MasterToSlaveCallable;
+
 import java.io.File;
 import java.io.IOException;
 
@@ -44,7 +46,7 @@ final class ProcessLiveness {
         return channel.call(new Liveness(pid));
     }
 
-    private static final class Liveness implements Callable<Boolean,RuntimeException> {
+    private static final class Liveness extends MasterToSlaveCallable<Boolean,RuntimeException> {
         private final int pid;
         Liveness(int pid) {
             this.pid = pid;

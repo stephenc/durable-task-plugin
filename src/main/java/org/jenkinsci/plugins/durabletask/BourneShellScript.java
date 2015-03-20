@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.List;
 import javax.annotation.Nonnull;
 import jenkins.model.Jenkins;
+import jenkins.security.MasterToSlaveCallable;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 /**
@@ -51,7 +52,7 @@ public final class BourneShellScript extends FileMonitoringTask {
     @DataBoundConstructor public BourneShellScript(String script) {
         this.script = Util.fixNull(script);
     }
-    
+
     public String getScript() {
         return script;
     }
@@ -161,7 +162,7 @@ public final class BourneShellScript extends FileMonitoringTask {
 
     }
 
-    private static final class DarwinCheck implements Callable<Boolean,RuntimeException> {
+    private static final class DarwinCheck extends MasterToSlaveCallable<Boolean,RuntimeException> {
         @Override public Boolean call() throws RuntimeException {
             return Platform.isDarwin();
         }

@@ -32,10 +32,10 @@ import hudson.slaves.AbstractCloudComputer;
 import hudson.slaves.AbstractCloudSlave;
 import hudson.slaves.CloudRetentionStrategy;
 import hudson.slaves.EphemeralNode;
-import hudson.util.TimeUnit2;
 import jenkins.model.Jenkins;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -48,7 +48,7 @@ public final class OnceRetentionStrategy extends CloudRetentionStrategy implemen
     private static final Logger LOGGER = Logger.getLogger(OnceRetentionStrategy.class.getName());
 
     private transient boolean terminating;
-    
+
     private int idleMinutes;
 
     /**
@@ -66,7 +66,7 @@ public final class OnceRetentionStrategy extends CloudRetentionStrategy implemen
         // terminate. If it's not already trying to terminate then lets terminate manually.
         if (c.isIdle() && !disabled) {
             final long idleMilliseconds = System.currentTimeMillis() - c.getIdleStartMilliseconds();
-            if (idleMilliseconds > TimeUnit2.MINUTES.toMillis(idleMinutes)) {
+            if (idleMilliseconds > TimeUnit.MINUTES.toMillis(idleMinutes)) {
                 LOGGER.log(Level.FINE, "Disconnecting {0}", c.getName());
                 done(c);
             }
@@ -96,11 +96,12 @@ public final class OnceRetentionStrategy extends CloudRetentionStrategy implemen
     private void done(Executor executor) {
         final AbstractCloudComputer<?> c = (AbstractCloudComputer) executor.getOwner();
         Queue.Executable exec = executor.getCurrentExecutable();
+        final String computerName = c.getName();
         if (exec instanceof ContinuableExecutable && ((ContinuableExecutable) exec).willContinue()) {
-            LOGGER.log(Level.FINE, "not terminating {0} because {1} says it will be continued", new Object[] {c.getName(), exec});
+            LOGGER.log(Level.FINE, "not terminating {0} because {1} says it will be continued", new Object[] {computerName, exec});
             return;
         }
-        LOGGER.log(Level.FINE, "terminating {0} since {1} seems to be finished", new Object[] {c.getName(), exec});
+        LOGGER.log(Level.FINE, "terminating {0} since {1} seems to be finished", new Object[] {computerName, exec});
         done(c);
     }
 
@@ -115,27 +116,30 @@ public final class OnceRetentionStrategy extends CloudRetentionStrategy implemen
         Computer.threadPoolForRemoting.submit(new Runnable() {
             @Override
             public void run() {
-                final Jenkins jenkins = Jenkins.getInstance();
-                // TODO once the baseline is 1.592+ switch to Queue.withLock
-                Object queue = jenkins == null ? OnceRetentionStrategy.this : jenkins.getQueue();
-                synchronized (queue) {
-                    try {
-                        AbstractCloudSlave node = c.getNode();
-                        if (node != null) {
-                            node.terminate();
-                        }
-                    } catch (InterruptedException e) {
-                        LOGGER.log(Level.WARNING, "Failed to terminate " + c.getName(), e);
-                        synchronized (OnceRetentionStrategy.this) {
-                            terminating = false;
-                        }
-                    } catch (IOException e) {
-                        LOGGER.log(Level.WARNING, "Failed to terminate " + c.getName(), e);
-                        synchronized (OnceRetentionStrategy.this) {
-                            terminating = false;
+                Queue.withLock(new Runnable() {
+                    @Override
+                    public void run() {
+                        final String computerName = c.getName();
+                        try {
+                            AbstractCloudSlave node = c.getNode();
+                            if (node != null) {
+                                node.terminate();
+                            }
+                        } catch (InterruptedException e) {
+                            LOGGER.log(Level.WARNING,
+                                    String.format("Failed to terminate %s: %s", computerName, e.getMessage()), e);
+                            synchronized (OnceRetentionStrategy.this) {
+                                terminating = false;
+                            }
+                        } catch (IOException e) {
+                            LOGGER.log(Level.WARNING,
+                                    String.format("Failed to terminate %s: %s", computerName, e.getMessage()), e);
+                            synchronized (OnceRetentionStrategy.this) {
+                                terminating = false;
+                            }
                         }
                     }
-                }
+                });
             }
         });
     }
